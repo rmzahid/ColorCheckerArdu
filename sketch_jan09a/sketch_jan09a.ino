@@ -1,14 +1,24 @@
+
 #include <LiquidCrystal.h>
+#include <SPI.h>
+#include <SD.h>
+
+const int chipSelect = 10;
 
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);        // select the pins used on the LCD panel
 
 int photoTran = A5;
 int reading = 0;
 
-int redLED = 11;//3;
-int greenLED = 12;// 5;
-int blueLED = 13;//6;
-
+int redLED = 3;//3;
+int greenLED = 2;// 5;
+int blueLED = 1;//6;
+/*
+  ** MOSI - pin 11
+  ** MISO - pin 12
+  ** CLK - pin 13
+  ** CS - pin 10 (for MKRZero SD: SDCARD_SS_PIN)
+*/
 int wait = 250;
 int waitF = 500;
 int nextReading = 60;//60 sec
@@ -49,14 +59,25 @@ void setup() {
   pinMode(redLED, OUTPUT);
   pinMode(greenLED, OUTPUT);
   pinMode(blueLED, OUTPUT);
-  Serial.begin(9600);
-  delay(1000);
+  
+  //Serial.begin(9600);
+  //delay(500);
+
+ // see if the card is present and can be initialized:
+  if (!SD.begin(chipSelect)) {
+    //-Serial.println("Card failed, or not present");
+    // don't do anything more:
+    while (1);
+  }
+  //-Serial.println("card initialized.");
+
+  
   // set up the LCD's number of columns and rows:
   lcd.begin(16, 2);
-
+  lcd.clear();
   lcd.setCursor(0, 0);                   // set the LCD cursor   position
   lcd.print("Welcome to ");
-  delay(100);
+  delay(1000);
   lcd.setCursor(0, 1);                   // set the LCD cursor   position
   lcd.print("ColorChecker 1");
   lastTime=millis();
@@ -65,7 +86,7 @@ void setup() {
 
 }
 
-
+// The photo transistor reading for each color LED R for red, G for green and B for blue.
 void readColor(float &ReadingR, float &ReadingG, float &ReadingB) {
   float readingR = 0;
   float readingG = 0;
@@ -73,24 +94,25 @@ void readColor(float &ReadingR, float &ReadingG, float &ReadingB) {
   int i;
   for (i = 0; i < maxLimit; i++) {
     digitalWrite(blueLED, LOW);
+    // Red LED
     digitalWrite(redLED, HIGH); delay(wait);
     readingR += analogRead(photoTran);
-    Serial.print(readingR);
-    Serial.print(",");
+    //-Serial.print(readingR);
+    //-Serial.print(",");
     delay(wait);
 
     digitalWrite(redLED, LOW);
     digitalWrite(greenLED, HIGH); delay(wait);
     readingG += analogRead(photoTran);
-    Serial.print(readingG);
-    Serial.print(",");
+    //-Serial.print(readingG);
+    //-Serial.print(",");
     delay(wait);
 
     digitalWrite(greenLED, LOW);
     digitalWrite(blueLED, HIGH); delay(wait); //delay(wait);
     readingB += analogRead(photoTran);
-    Serial.print(readingB);
-    Serial.println("");
+    //-Serial.print(readingB);
+    //-Serial.println("");
     delay(wait);
 
   }
@@ -155,38 +177,38 @@ void calibrate() {
     digitalWrite(blueLED, LOW);
     digitalWrite(redLED, HIGH); delay(wait);
     readingR += analogRead(photoTran);
-    Serial.print(readingR);
-    Serial.print(",");
+    //-Serial.print(readingR);
+    //-Serial.print(",");
     delay(wait);
 
     digitalWrite(redLED, LOW);
     digitalWrite(greenLED, HIGH); delay(wait);
     readingG += analogRead(photoTran);
-    Serial.print(readingG);
-    Serial.print(",");
+    //-Serial.print(readingG);
+    //-Serial.print(",");
     delay(wait);
 
     digitalWrite(greenLED, LOW);
     digitalWrite(blueLED, HIGH); delay(wait); //delay(wait);
     readingB += analogRead(photoTran);
-    Serial.print(readingB);
-    Serial.println("X");
+    //-Serial.print(readingB);
+    //-Serial.println("X");
     delay(wait);
     digitalWrite(blueLED, LOW);
   }
   
-  Serial.print("C-");
+  //-Serial.print("C-");
   maxReadingR = readingR / maxLimit;
   maxReadingG = readingG / maxLimit;
   maxReadingB = readingB / maxLimit;
   //lcd.setCursor(0,1);
   
-  Serial.print(maxReadingR);
-  Serial.print(";");
-  Serial.print(maxReadingG);
-  Serial.print(";");
-  Serial.print(maxReadingB);
-  Serial.println(";");
+  //-Serial.print(maxReadingR);
+  //-Serial.print(";");
+  //-Serial.print(maxReadingG);
+  //-Serial.print(";");
+  //-Serial.print(maxReadingB);
+  //-Serial.println(";");
 
 }
 
@@ -259,6 +281,33 @@ void myCleanScreen(){
   }
 }
 
+void printFile(int idex){
+  // make a string for assembling the data to log:
+  String dataString = "";
+
+  // read three sensors and append to the string:
+  dataString += String(idex);
+  dataString += ",";  
+  // open the file. note that only one file can be open at a time,
+  // so you have to close this one before opening another.
+  File dataFile = SD.open("datalog.txt", FILE_WRITE);
+
+  // if the file is available, write to it:
+  
+    
+   if (dataFile) {
+    dataFile.println(dataString);
+    dataFile.close();
+    // print to the serial port too:
+    //-Serial.println(dataString);
+  }
+  // if the file isn't open, pop up an error:
+  else {
+    lcd.print("error datalog");
+  }
+  
+}
+
 void myMenu() { //int mFlag, int mActuation) {
   
   String menu[6][1] = {
@@ -276,13 +325,14 @@ void myMenu() { //int mFlag, int mActuation) {
     "5-",
   //"Put main sample"
   };
-  
+  /*
   Serial.print("M-");
   Serial.print(menuFlag);
   Serial.print("-");
   Serial.print(bPress);
   Serial.print(menu[menuFlag][0]);
   Serial.println(activationFlag);
+  */
   if(menuFlag!=5)
     myCleanScreen();
   lcd.setCursor(0, 0);
@@ -308,7 +358,7 @@ void myMenu() { //int mFlag, int mActuation) {
       //read first color
       if (activationFlag) {
         readColor(sampleR[0], sampleG[0], sampleB[0]);
-        Serial.println(sampleR[0]);
+        //-Serial.println(sampleR[0]);
         activationFlag = 0;
       }
       else
@@ -322,7 +372,7 @@ void myMenu() { //int mFlag, int mActuation) {
       //read color for second point
       if (activationFlag) {
         readColor(sampleR[1], sampleG[1], sampleB[1]);
-        Serial.println(sampleR[1]);
+        //-Serial.println(sampleR[1]);
         activationFlag = 0;
       }
       else
@@ -336,7 +386,7 @@ void myMenu() { //int mFlag, int mActuation) {
       //read color third point
       if (activationFlag) {
         readColor(sampleR[2], sampleG[2], sampleB[2]);
-        Serial.println(sampleR[2]);
+        //-Serial.println(sampleR[2]);
         activationFlag = 0;
       }
       else
@@ -351,7 +401,7 @@ void myMenu() { //int mFlag, int mActuation) {
       //set of sample reading interval
       if (activationFlag) {
         //setInterval();
-        interval=1UL*60*1000;
+        interval=15UL*60*1000;
         activationFlag = 0;
       }
       else
@@ -372,7 +422,7 @@ void myMenu() { //int mFlag, int mActuation) {
       //delay(100);
       while(millis() - lastTime <=  interval) {
         lcd.setCursor(0, 1);                   // set the LCD cursor   position
-        lcd.print(millis());
+        lcd.print(millis()/1000);
         delay(1000);
       }
       if (millis() - lastTime >=  interval) {
@@ -382,14 +432,14 @@ void myMenu() { //int mFlag, int mActuation) {
         readColor(R, G, B);
         delay(100);
         nearestColor(R, G, B, index);
-        Serial.print("Index: ");
-        Serial.println(index);
+        //-Serial.print("Index: ");
+        //-Serial.println(index);
         lcd.setCursor(0, 0);
         delay(150);
         lcd.print("Index: ");
         lcd.print(index);
         delay(100);
-        //printFile(index);//with time interval
+        printFile(index);//with time interval
         activationFlag = 0;
         lastTime = millis();                  // reset timer
         
@@ -407,8 +457,8 @@ void keyPress() {
   lcd.setCursor(0, 1);                   // set the LCD cursor   position
   lcd.print(pressNow);
   delay(100);
-  Serial.print("Analog K --");
-  Serial.println(val);
+  //-Serial.print("Analog K --");
+  //-Serial.println(val);
 
   while (val <= 1023) {
     //lcd.setCursor(1, 0);                   // set the LCD cursor   position
@@ -453,13 +503,14 @@ void keyPress() {
   }
 
 
-
+/*
   Serial.print("bPress");
   Serial.print(val);
   Serial.print(bPress);
+  */
   if (bPress == SELECT) {
     activationFlag = 1;
-    Serial.println("Activation");
+    lcd.print("Activated");
   }
 
 }
@@ -472,7 +523,7 @@ void loop() {
   //lcd.print("Val ---");
   //lcd.print(val);
 
-  Serial.print("Analog 0 --");
+  //-Serial.print("Analog 0 --");
   //Serial.println(val);
 
   //lcd.setCursor(0, 0);
@@ -492,15 +543,16 @@ void loop() {
     keyPress();
     myMenu();
     menuFlag++;
-    
+    /*
     Serial.print("NOW-------Auto -----");
     Serial.println(menuFlag);
     delay(waitF);
     //scanf enter
+    */
   }
   else
   {
-    Serial.println("Sample Insert----   ");
+    //-Serial.println("Sample Insert----   ");
     menuFlag = 5;
     myMenu();
     delay(waitF);
